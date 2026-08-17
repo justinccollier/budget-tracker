@@ -518,6 +518,7 @@
   const expensesSheet = document.getElementById('expensesSheet');
 
   function openSheet(sheet){
+    [addSheet, settingsSheet, expensesSheet].forEach(s => s.classList.remove('show'));
     overlay.classList.add('show');
     sheet.classList.add('show');
   }
