@@ -88,9 +88,10 @@
   .empty-note{font-size:13px;color:var(--ink-faint);padding:6px 0 2px;}
 
   /* ---------- Action buttons ---------- */
-  .actions{display:flex;gap:12px;margin-top:2px;}
-  .btn{flex:1;padding:15px;border-radius:999px;border:none;font-family:inherit;font-weight:600;font-size:14px;
-       display:flex;align-items:center;justify-content:center;gap:7px;cursor:pointer;
+  .actions{display:flex;flex-direction:column;gap:12px;margin-top:2px;}
+  .actions-row{display:flex;gap:12px;}
+  .btn{flex:1;padding:15px 6px;border-radius:999px;border:none;font-family:inherit;font-weight:600;font-size:13.5px;
+       display:flex;align-items:center;justify-content:center;gap:5px;cursor:pointer;white-space:nowrap;
        transition:transform .15s ease, box-shadow .15s ease;}
   .btn:active{transform:scale(.96);}
   .btn-primary{background:var(--ink);color:var(--surface);box-shadow:0 8px 18px rgba(44,36,28,.18);}
@@ -167,6 +168,16 @@
                             width:100%;color:var(--ink);font-variant-numeric:tabular-nums;}
   .budget-field-wrap input:focus{outline:none;}
 
+  /* ---------- Expenses list ---------- */
+  .expense-row{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--line);}
+  .expense-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;}
+  .expense-top{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500;}
+  .expense-top .label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .expense-meta{font-size:12px;color:var(--ink-faint);}
+  .expense-amount{font-variant-numeric:tabular-nums;font-weight:600;font-size:14.5px;white-space:nowrap;}
+  .expense-edit-btn{background:none;border:none;color:var(--ink-faint);font-size:15px;cursor:pointer;padding:6px;flex-shrink:0;}
+  .expense-edit-btn:active{color:var(--ink);}
+
   .util-actions{display:flex;flex-direction:column;margin-top:22px;padding-top:18px;border-top:1px solid var(--line);}
   .btn-text{background:none;border:none;font-family:inherit;font-size:14.5px;font-weight:600;color:var(--ink);
             text-align:left;padding:13px 0;display:flex;align-items:center;justify-content:space-between;cursor:pointer;}
@@ -202,19 +213,22 @@
   </div>
 
   <div class="actions">
-    <button class="btn btn-primary" id="openAddBtn">＋&nbsp; Add Expense</button>
-    <button class="btn btn-secondary" id="openSettingsBtn">⚙&nbsp; Settings</button>
+    <button class="btn btn-primary" id="openAddBtn" style="width:100%;">＋&nbsp; Add Expense</button>
+    <div class="actions-row">
+      <button class="btn btn-secondary" id="openExpensesBtn">🧾&nbsp; Expenses</button>
+      <button class="btn btn-secondary" id="openSettingsBtn">⚙&nbsp; Settings</button>
+    </div>
   </div>
 </div>
 
 <!-- Overlay -->
 <div class="overlay" id="overlay"></div>
 
-<!-- Add Expense Sheet -->
+<!-- Add / Edit Expense Sheet -->
 <div class="sheet" id="addSheet">
   <div class="sheet-handle"></div>
   <div class="sheet-head">
-    <h2 class="display">Add Expense</h2>
+    <h2 class="display" id="addSheetTitle">Add Expense</h2>
     <button class="close-x" data-close>✕</button>
   </div>
 
@@ -239,6 +253,17 @@
   <div class="form-error" id="formError"></div>
 
   <button class="btn btn-primary sheet-submit" id="submitExpenseBtn">Add Expense</button>
+  <button class="btn-text danger" id="deleteExpenseBtn" style="display:none; justify-content:center; padding-top:16px;">Delete this expense</button>
+</div>
+
+<!-- Expenses Sheet -->
+<div class="sheet" id="expensesSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-head">
+    <h2 class="display" id="expensesSheetTitle">Expenses</h2>
+    <button class="close-x" data-close>✕</button>
+  </div>
+  <div id="expensesList"></div>
 </div>
 
 <!-- Settings Sheet -->
@@ -490,6 +515,7 @@
   const overlay = document.getElementById('overlay');
   const addSheet = document.getElementById('addSheet');
   const settingsSheet = document.getElementById('settingsSheet');
+  const expensesSheet = document.getElementById('expensesSheet');
 
   function openSheet(sheet){
     overlay.classList.add('show');
@@ -499,20 +525,38 @@
     overlay.classList.remove('show');
     addSheet.classList.remove('show');
     settingsSheet.classList.remove('show');
+    expensesSheet.classList.remove('show');
   }
   overlay.addEventListener('click', closeSheets);
   document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', closeSheets));
 
-  // ---------------- Add Expense ----------------
-  document.getElementById('openAddBtn').addEventListener('click', () => {
-    document.getElementById('amountInput').value = '';
-    document.getElementById('noteInput').value = '';
+  // ---------------- Add / Edit Expense ----------------
+  let editingExpenseId = null;
+  const addSheetTitle = document.getElementById('addSheetTitle');
+  const submitExpenseBtn = document.getElementById('submitExpenseBtn');
+  const deleteExpenseBtn = document.getElementById('deleteExpenseBtn');
+
+  function openAddSheet(expense){
+    editingExpenseId = expense ? expense.id : null;
+    document.getElementById('amountInput').value = expense ? expense.amount : '';
+    document.getElementById('noteInput').value = expense ? (expense.note || '') : '';
     document.getElementById('formError').textContent = '';
-    selectedChipId = state.categories[0] ? state.categories[0].id : null;
+    selectedChipId = expense ? expense.categoryId : (state.categories[0] ? state.categories[0].id : null);
     renderChips();
+    if(expense){
+      addSheetTitle.textContent = 'Edit Expense';
+      submitExpenseBtn.textContent = 'Save Changes';
+      deleteExpenseBtn.style.display = 'flex';
+    } else {
+      addSheetTitle.textContent = 'Add Expense';
+      submitExpenseBtn.textContent = 'Add Expense';
+      deleteExpenseBtn.style.display = 'none';
+    }
     openSheet(addSheet);
     setTimeout(() => document.getElementById('amountInput').focus(), 300);
-  });
+  }
+
+  document.getElementById('openAddBtn').addEventListener('click', () => openAddSheet(null));
 
   function renderChips(){
     const grid = document.getElementById('chipGrid');
@@ -533,7 +577,7 @@
   amountInput.addEventListener('focus', () => amountWrap.classList.add('focused'));
   amountInput.addEventListener('blur', () => amountWrap.classList.remove('focused'));
 
-  document.getElementById('submitExpenseBtn').addEventListener('click', async () => {
+  submitExpenseBtn.addEventListener('click', async () => {
     const errEl = document.getElementById('formError');
     const amt = parseFloat(amountInput.value);
     if(!amt || amt <= 0){
@@ -545,16 +589,77 @@
       return;
     }
     const note = document.getElementById('noteInput').value.trim();
-    state.expenses.push({
-      id: uid(),
-      amount: Math.round(amt * 100) / 100,
-      categoryId: selectedChipId,
-      note: note || null,
-      date: new Date().toISOString(),
-    });
+
+    if(editingExpenseId){
+      const existing = state.expenses.find(e => e.id === editingExpenseId);
+      if(existing){
+        existing.amount = Math.round(amt * 100) / 100;
+        existing.categoryId = selectedChipId;
+        existing.note = note || null;
+      }
+    } else {
+      state.expenses.push({
+        id: uid(),
+        amount: Math.round(amt * 100) / 100,
+        categoryId: selectedChipId,
+        note: note || null,
+        date: new Date().toISOString(),
+      });
+    }
     await saveExpenses();
     renderAll();
     closeSheets();
+  });
+
+  deleteExpenseBtn.addEventListener('click', async () => {
+    if(!editingExpenseId) return;
+    const ok = confirm('Delete this expense?');
+    if(!ok) return;
+    state.expenses = state.expenses.filter(e => e.id !== editingExpenseId);
+    await saveExpenses();
+    renderAll();
+    closeSheets();
+  });
+
+  // ---------------- Expenses list ----------------
+  const expensesList = document.getElementById('expensesList');
+
+  function renderExpensesList(){
+    if(state.expenses.length === 0){
+      expensesList.innerHTML = `<div class="empty-note">No expenses logged yet this month.</div>`;
+      return;
+    }
+    const sorted = state.expenses.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+    expensesList.innerHTML = sorted.map(e => {
+      const cat = state.categories.find(c => c.id === e.categoryId);
+      const dateStr = new Date(e.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const metaStr = e.note ? `${dateStr} · ${escapeHtml(e.note)}` : dateStr;
+      return `
+        <div class="expense-row" data-id="${e.id}">
+          <div class="expense-info">
+            <div class="expense-top">
+              <span class="dot" style="background:${cat ? `var(--${cat.color})` : 'var(--ink-faint)'}"></span>
+              <span class="label">${cat ? escapeHtml(cat.name) : 'Uncategorized'}</span>
+            </div>
+            <div class="expense-meta">${metaStr}</div>
+          </div>
+          <div class="expense-amount">${fmtMoneyShort(e.amount)}</div>
+          <button class="expense-edit-btn" data-role="edit">✎</button>
+        </div>`;
+    }).join('');
+
+    expensesList.querySelectorAll('.expense-row').forEach(row => {
+      const id = row.getAttribute('data-id');
+      row.querySelector('[data-role="edit"]').addEventListener('click', () => {
+        const expense = state.expenses.find(e => e.id === id);
+        if(expense) openAddSheet(expense);
+      });
+    });
+  }
+
+  document.getElementById('openExpensesBtn').addEventListener('click', () => {
+    renderExpensesList();
+    openSheet(expensesSheet);
   });
 
   // ---------------- Settings: overall budget ----------------
